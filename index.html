@@ -7,11 +7,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Expenses">
-<meta name="theme-color" content="#07060d">
+<meta name="theme-color" content="#0a0a0f">
 <meta name="robots" content="noindex">
 <title>Expenses</title>
 <style>
-:root{--bg:#0a0a0f;--ln:#24242e;--tx:#e6e6ec;--dim:#6b6b80;--cy:#00e5ff;--yl:#fcee0a;--ok:#3dff8a;--er:#ff4d6d}
+:root{--bg:#0a0a0f;--ln:#24242e;--tx:#e6e6ec;--dim:#6b6b80;--cy:#00e5ff;--yl:#d4a52a;--ok:#3dff8a;--er:#ff4d6d}
 *{box-sizing:border-box;font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0}
 body{display:flex;flex-direction:column;gap:12px;height:100dvh;overflow:hidden;background:var(--bg);color:var(--tx);
@@ -27,12 +27,19 @@ body{display:flex;flex-direction:column;gap:12px;height:100dvh;overflow:hidden;b
 #amt::placeholder,#desc::placeholder{color:#3d3d4d}
 input:focus{outline:none;border-color:var(--cy)}
 .cats{flex:1 1 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:8px;min-height:0}
-.cats button{min-width:0;min-height:0;overflow:hidden;font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;line-height:1.25;padding:2px 4px;
+.cats button{min-width:0;min-height:0;overflow:hidden;font-size:clamp(10px,3vw,13px);font-weight:600;letter-spacing:0;text-transform:uppercase;line-height:1.25;padding:2px 3px;overflow-wrap:break-word;
   color:#a8a8ba;background:#111118;border:1px solid var(--ln);border-radius:0;
   clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
 .cats button.on{color:var(--cy);border-color:var(--cy);background:rgba(0,229,255,.07)}
 #save{flex:none;width:100%;height:64px;font-size:18px;font-weight:800;letter-spacing:6px;text-transform:uppercase;border:0;border-radius:0;background:var(--yl);color:#0a0a0f}
-#save:disabled{opacity:.5}
+#save{position:relative;overflow:hidden;transition:background .25s,color .25s}
+#save:disabled{opacity:.85}
+#save.busy::after{content:"";position:absolute;top:0;bottom:0;left:0;width:60%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);animation:sweep .9s linear infinite}
+@keyframes sweep{from{transform:translateX(-100%)}to{transform:translateX(220%)}}
+#save.done{background:var(--ok);animation:pop .4s ease}
+@keyframes pop{0%{transform:scale(1)}35%{transform:scale(.95)}70%{transform:scale(1.02)}100%{transform:scale(1)}}
+#save.fail{background:var(--er);color:#fff;animation:shake .35s}
+@keyframes shake{20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
 </style>
 </head>
 <body>
@@ -85,21 +92,28 @@ if (!KEY) {
     .catch(function () { /* offline or slow: keep cached categories */ });
 }
 
+function resetBtn() { save.className = 'cut'; save.disabled = false; save.textContent = 'Save'; }
+
 save.onclick = function () {
   var a = amt.value.replace(/,/g, '').trim(), d = desc.value.trim();
   if (!(parseFloat(a) > 0)) { say('Enter an amount', 'err'); amt.focus(); return; }
   if (!d) { say('What was it?', 'err'); desc.focus(); return; }
   if (document.activeElement) document.activeElement.blur();
-  save.disabled = true; save.textContent = 'Uploading…';
+  save.disabled = true; save.classList.add('busy'); save.textContent = 'Sending';
   fetch(API, { method: 'POST', body: JSON.stringify({ key: KEY, amount: a, desc: d, cat: cat }) })
     .then(function (r) { return r.json(); })
     .then(function (res) {
       if (!res.ok) throw new Error(res.error || 'Not saved');
       say('✓ logged ' + fmt(a) + ' // today ' + fmt(res.totals.today) + ' // month ' + fmt(res.totals.month), 'ok');
       amt.value = ''; desc.value = ''; cat = ''; mark();
+      save.classList.remove('busy'); save.classList.add('done'); save.textContent = '✓ Saved';
+      setTimeout(resetBtn, 1400);
     })
-    .catch(function (e) { say('⚠ ' + (e.message || 'Not saved — check signal and try again'), 'err'); })
-    .then(function () { save.disabled = false; save.textContent = 'Save'; });
+    .catch(function (e) {
+      say('⚠ ' + (e.message || 'Not saved — check signal and try again'), 'err');
+      save.classList.remove('busy'); save.classList.add('fail'); save.textContent = 'Retry';
+      setTimeout(resetBtn, 1600);
+    });
 };
 </script>
 </body>
