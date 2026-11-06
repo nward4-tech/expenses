@@ -5,34 +5,43 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Expenses">
-<meta name="theme-color" content="#f4f4f7">
+<meta name="theme-color" content="#07060d">
 <meta name="robots" content="noindex">
 <title>Expenses</title>
 <style>
-*{box-sizing:border-box;font-family:-apple-system,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+:root{--bg:#0a0a0f;--ln:#24242e;--tx:#e6e6ec;--dim:#6b6b80;--cy:#00e5ff;--yl:#fcee0a;--ok:#3dff8a;--er:#ff4d6d}
+*{box-sizing:border-box;font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0}
-body{display:flex;flex-direction:column;gap:12px;height:100dvh;overflow:hidden;background:#f4f4f7;color:#111;
-  padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))}
-#msg{flex:none;text-align:center;font-size:15px;color:#666;min-height:20px}
-#msg.ok{color:#1e8e3e}#msg.err{color:#c5221f}
-#amt{flex:none;width:100%;font-size:34px;font-weight:700;text-align:center;padding:8px;height:76px;border:2px solid #d6d6de;border-radius:18px;background:#fff}
-#desc{flex:none;width:100%;font-size:21px;padding:10px 18px;height:62px;border:2px solid #d6d6de;border-radius:18px;background:#fff}
-input:focus{outline:none;border-color:#5b4bdb}
-.cats{flex:1 1 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:9px;min-height:0}
-.cats button{min-width:0;min-height:0;overflow:hidden;font-size:16px;font-weight:500;padding:2px 4px;border:2px solid #e2e2ea;border-radius:16px;background:#fff;color:#111;line-height:1.15}
-.cats button.on{background:#5b4bdb;color:#fff;border-color:#5b4bdb}
-#save{flex:none;width:100%;height:66px;font-size:22px;border:0;border-radius:18px;background:#5b4bdb;color:#fff;font-weight:700}
-#save:disabled{opacity:.6}
+body{display:flex;flex-direction:column;gap:12px;height:100dvh;overflow:hidden;background:var(--bg);color:var(--tx);
+  padding:calc(14px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))}
+.top{flex:none;display:flex;justify-content:space-between;font-size:11px;letter-spacing:3px;color:var(--dim)}
+.top span:first-child{color:var(--cy)}
+#msg{flex:none;text-align:center;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);min-height:16px}
+#msg.ok{color:var(--ok)}#msg.err{color:var(--er)}
+.cut{clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
+#amt,#desc{flex:none;width:100%;background:#111118;border:1px solid var(--ln);border-radius:0;color:var(--tx);-webkit-appearance:none}
+#amt{font-size:36px;font-weight:700;text-align:center;height:76px;padding:8px}
+#desc{font-size:18px;height:58px;padding:10px 16px}
+#amt::placeholder,#desc::placeholder{color:#3d3d4d}
+input:focus{outline:none;border-color:var(--cy)}
+.cats{flex:1 1 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:8px;min-height:0}
+.cats button{min-width:0;min-height:0;overflow:hidden;font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;line-height:1.25;padding:2px 4px;
+  color:#a8a8ba;background:#111118;border:1px solid var(--ln);border-radius:0;
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.cats button.on{color:var(--cy);border-color:var(--cy);background:rgba(0,229,255,.07)}
+#save{flex:none;width:100%;height:64px;font-size:18px;font-weight:800;letter-spacing:6px;text-transform:uppercase;border:0;border-radius:0;background:var(--yl);color:#0a0a0f}
+#save:disabled{opacity:.5}
 </style>
 </head>
 <body>
-<div id="msg">Log an expense</div>
-<input id="amt" inputmode="decimal" placeholder="฿ 0" autocomplete="off">
-<input id="desc" placeholder="What is it?" autocomplete="off">
+<div class="top"><span>EXPENSES_</span><b id="clock"></b></div>
+<div id="msg">ready</div>
+<input id="amt" class="cut" inputmode="decimal" placeholder="฿ 0" autocomplete="off">
+<input id="desc" class="cut" placeholder="What is it?" autocomplete="off">
 <div class="cats" id="cats"></div>
-<button id="save">Save</button>
+<button id="save" class="cut">Save</button>
 <script>
 var API = 'https://script.google.com/macros/s/AKfycbxNzH26j_WTSHnCahMTZK1XTc2l-VLRYuuUcSBcLdRGdQooqvyqbCOlUJijT8MCWAy31g/exec';
 var DEFAULT_CATS = ['Food & Dining','Groceries','Petrol','Car','House expense','Bills & Utilities','Kids','Family','Health','Insurance','Personal','Wardrobe','Electronics','Entertainment','Subscriptions','Travel','Gifts & Donations','Other'];
@@ -58,7 +67,8 @@ function drawCats(list) {
     box.appendChild(b);
   });
 }
-function showTotals(t) { if (t) say('Today ' + fmt(t.today) + ' · This month ' + fmt(t.month)); }
+(function tick(){var d=new Date();document.getElementById('clock').textContent=d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}).toUpperCase()+' '+d.toTimeString().slice(0,5);setTimeout(tick,30000)})();
+function showTotals(t) { if (t) say('today ' + fmt(t.today) + ' // month ' + fmt(t.month)); }
 
 var cached = null; try { cached = JSON.parse(store('exp_cats') || 'null'); } catch (e) {}
 drawCats(cached || DEFAULT_CATS);
@@ -80,12 +90,12 @@ save.onclick = function () {
   if (!(parseFloat(a) > 0)) { say('Enter an amount', 'err'); amt.focus(); return; }
   if (!d) { say('What was it?', 'err'); desc.focus(); return; }
   if (document.activeElement) document.activeElement.blur();
-  save.disabled = true; save.textContent = 'Saving…';
+  save.disabled = true; save.textContent = 'Uploading…';
   fetch(API, { method: 'POST', body: JSON.stringify({ key: KEY, amount: a, desc: d, cat: cat }) })
     .then(function (r) { return r.json(); })
     .then(function (res) {
       if (!res.ok) throw new Error(res.error || 'Not saved');
-      say('✓ Saved ' + fmt(a) + ' · Today ' + fmt(res.totals.today) + ' · Month ' + fmt(res.totals.month), 'ok');
+      say('✓ logged ' + fmt(a) + ' // today ' + fmt(res.totals.today) + ' // month ' + fmt(res.totals.month), 'ok');
       amt.value = ''; desc.value = ''; cat = ''; mark();
     })
     .catch(function (e) { say('⚠ ' + (e.message || 'Not saved — check signal and try again'), 'err'); })
