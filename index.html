@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Expenses">
+<meta name="theme-color" content="#f4f4f7">
+<meta name="robots" content="noindex">
+<title>Expenses</title>
+<style>
+*{box-sizing:border-box;font-family:-apple-system,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;gap:12px;height:100dvh;overflow:hidden;background:#f4f4f7;color:#111;
+  padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))}
+#msg{flex:none;text-align:center;font-size:15px;color:#666;min-height:20px}
+#msg.ok{color:#1e8e3e}#msg.err{color:#c5221f}
+#amt{flex:none;width:100%;font-size:34px;font-weight:700;text-align:center;padding:8px;height:76px;border:2px solid #d6d6de;border-radius:18px;background:#fff}
+#desc{flex:none;width:100%;font-size:21px;padding:10px 18px;height:62px;border:2px solid #d6d6de;border-radius:18px;background:#fff}
+input:focus{outline:none;border-color:#5b4bdb}
+.cats{flex:1 1 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:9px;min-height:0}
+.cats button{min-width:0;min-height:0;overflow:hidden;font-size:16px;font-weight:500;padding:2px 4px;border:2px solid #e2e2ea;border-radius:16px;background:#fff;color:#111;line-height:1.15}
+.cats button.on{background:#5b4bdb;color:#fff;border-color:#5b4bdb}
+#save{flex:none;width:100%;height:66px;font-size:22px;border:0;border-radius:18px;background:#5b4bdb;color:#fff;font-weight:700}
+#save:disabled{opacity:.6}
+</style>
+</head>
+<body>
+<div id="msg">Log an expense</div>
+<input id="amt" inputmode="decimal" placeholder="฿ 0" autocomplete="off">
+<input id="desc" placeholder="What is it?" autocomplete="off">
+<div class="cats" id="cats"></div>
+<button id="save">Save</button>
+<script>
+var API = 'https://script.google.com/macros/s/AKfycbxNzH26j_WTSHnCahMTZK1XTc2l-VLRYuuUcSBcLdRGdQooqvyqbCOlUJijT8MCWAy31g/exec';
+var DEFAULT_CATS = ['Food & Dining','Groceries','Petrol','Car','House expense','Bills & Utilities','Kids','Family','Health','Insurance','Personal','Wardrobe','Electronics','Entertainment','Subscriptions','Travel','Gifts & Donations','Other'];
+
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+
+// The secret key lives only in the link's #fragment (never sent to GitHub) and in this phone's storage.
+var m = location.hash.match(/k=([^&]+)/);
+var KEY = m ? decodeURIComponent(m[1]) : store('exp_key');
+if (m) store('exp_key', KEY);
+
+var box = document.getElementById('cats'), msg = document.getElementById('msg'), save = document.getElementById('save');
+var amt = document.getElementById('amt'), desc = document.getElementById('desc'), cat = '';
+
+function say(t, cls) { msg.textContent = t; msg.className = cls || ''; }
+function fmt(n) { return '฿' + Number(n || 0).toLocaleString(); }
+function mark() { [].forEach.call(box.children, function (x) { x.classList.toggle('on', x.textContent === cat); }); }
+function drawCats(list) {
+  box.innerHTML = '';
+  list.forEach(function (c) {
+    var b = document.createElement('button'); b.textContent = c;
+    b.onclick = function () { cat = cat === c ? '' : c; mark(); };
+    box.appendChild(b);
+  });
+}
+function showTotals(t) { if (t) say('Today ' + fmt(t.today) + ' · This month ' + fmt(t.month)); }
+
+var cached = null; try { cached = JSON.parse(store('exp_cats') || 'null'); } catch (e) {}
+drawCats(cached || DEFAULT_CATS);
+
+if (!KEY) {
+  say('Missing key — open the full link once', 'err'); save.disabled = true;
+} else {
+  fetch(API + '?action=cats&key=' + encodeURIComponent(KEY))
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.cats && d.cats.length) { drawCats(d.cats); store('exp_cats', JSON.stringify(d.cats)); }
+      showTotals(d.totals);
+    })
+    .catch(function () { /* offline or slow: keep cached categories */ });
+}
+
+save.onclick = function () {
+  var a = amt.value.replace(/,/g, '').trim(), d = desc.value.trim();
+  if (!(parseFloat(a) > 0)) { say('Enter an amount', 'err'); amt.focus(); return; }
+  if (!d) { say('What was it?', 'err'); desc.focus(); return; }
+  if (document.activeElement) document.activeElement.blur();
+  save.disabled = true; save.textContent = 'Saving…';
+  fetch(API, { method: 'POST', body: JSON.stringify({ key: KEY, amount: a, desc: d, cat: cat }) })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      if (!res.ok) throw new Error(res.error || 'Not saved');
+      say('✓ Saved ' + fmt(a) + ' · Today ' + fmt(res.totals.today) + ' · Month ' + fmt(res.totals.month), 'ok');
+      amt.value = ''; desc.value = ''; cat = ''; mark();
+    })
+    .catch(function (e) { say('⚠ ' + (e.message || 'Not saved — check signal and try again'), 'err'); })
+    .then(function () { save.disabled = false; save.textContent = 'Save'; });
+};
+</script>
+</body>
+</html>
