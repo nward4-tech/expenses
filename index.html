@@ -67,10 +67,15 @@ input:focus{outline:none;border-color:var(--cy)}
 .row .w small{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
 .row .a{flex:none;font-size:15px;font-weight:700}
 .empty{text-align:center;color:var(--dim);font-size:12px;padding:32px 0;letter-spacing:1px}
+.dpick{position:relative;font-size:11px;letter-spacing:2px;color:var(--dim);border:1px solid var(--ln);padding:7px 10px}
+.dpick.past{color:var(--bg);background:var(--yl);border-color:var(--yl)}
+.dpick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:16px;border:0}
+#q{flex:none;width:100%;font:inherit;font-size:16px;padding:10px 12px;color:var(--tx);background:#111118;border:1px solid var(--ln);border-radius:0;-webkit-appearance:none}
+#q::placeholder{color:#3d3d4d}
 </style>
 </head>
 <body>
-<div class="top"><span id="title">EXPENSES_</span><button id="histBtn">HISTORY</button></div>
+<div class="top"><span id="title">EXPENSES_</span><label class="dpick" id="dpick"><span id="dlabel">TODAY</span><input type="date" id="dt"></label><button id="histBtn">HISTORY</button></div>
 <div class="view" id="logV">
 <div id="msg">ready</div>
 <input id="amt" class="cut" inputmode="decimal" placeholder="฿ 0" autocomplete="off">
@@ -80,6 +85,7 @@ input:focus{outline:none;border-color:var(--cy)}
 </div>
 <div class="view hidden" id="histV">
 <div class="nav"><button id="prev">‹</button><div id="per"></div><button id="next">›</button><button id="allBtn">ALL</button></div>
+<input id="q" type="search" placeholder="search…" autocomplete="off">
 <div class="tot" id="tot"></div>
 <div class="chips" id="chips"></div>
 <div class="list" id="list"></div>
@@ -126,6 +132,19 @@ if (!KEY) {
     .catch(function () { /* offline or slow: keep cached categories */ });
 }
 
+// ---------- Date ----------
+var MONS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+var dt = document.getElementById('dt'), dlabel = document.getElementById('dlabel'), dpick = document.getElementById('dpick');
+function todayStr() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function setDate(s) {
+  dt.value = s || todayStr();
+  var isToday = dt.value === todayStr(), p = dt.value.split('-');
+  dlabel.textContent = isToday ? 'TODAY' : p[2] + ' ' + MONS[+p[1] - 1];
+  dpick.classList.toggle('past', !isToday);
+}
+dt.onchange = function () { setDate(dt.value); };
+setDate();
+
 function resetBtn() { save.className = 'cut'; save.disabled = false; save.textContent = 'Save'; }
 
 save.onclick = function () {
@@ -134,12 +153,12 @@ save.onclick = function () {
   if (!d) { say('What was it?', 'err'); desc.focus(); return; }
   if (document.activeElement) document.activeElement.blur();
   save.disabled = true; save.classList.add('busy'); save.textContent = 'Sending';
-  fetch(API, { method: 'POST', body: JSON.stringify({ key: KEY, amount: a, desc: d, cat: cat }) })
+  fetch(API, { method: 'POST', body: JSON.stringify({ key: KEY, amount: a, desc: d, cat: cat, date: dt.value || todayStr() }) })
     .then(function (r) { return r.json(); })
     .then(function (res) {
       if (!res.ok) throw new Error(res.error || 'Not saved');
-      say('✓ logged ' + fmt(a) + ' // today ' + fmt(res.totals.today) + ' // month ' + fmt(res.totals.month), 'ok');
-      amt.value = ''; desc.value = ''; cat = ''; mark(); stale = true;
+      say('✓ logged ' + fmt(a) + (dt.value !== todayStr() ? ' on ' + dlabel.textContent : '') + ' // today ' + fmt(res.totals.today) + ' // month ' + fmt(res.totals.month), 'ok');
+      amt.value = ''; desc.value = ''; cat = ''; mark(); stale = true; setDate();
       save.classList.remove('busy'); save.classList.add('done'); save.textContent = '✓ Saved';
       setTimeout(resetBtn, 1400);
     })
@@ -152,7 +171,8 @@ save.onclick = function () {
 
 // ---------- History ----------
 var MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-var rows = null, stale = true, mode = 'month', fcat = '';
+var rows = null, stale = true, mode = 'month', fcat = '', q = document.getElementById('q');
+q.oninput = function () { render(); };
 var logV = document.getElementById('logV'), histV = document.getElementById('histV'), histBtn = document.getElementById('histBtn');
 var per = document.getElementById('per'), tot = document.getElementById('tot'), chips = document.getElementById('chips'), list = document.getElementById('list');
 var prevB = document.getElementById('prev'), nextB = document.getElementById('next'), allB = document.getElementById('allBtn');
@@ -190,7 +210,8 @@ function render() {
   prevB.style.visibility = nextB.style.visibility = all ? 'hidden' : 'visible';
   var p = ym.split('-');
   per.textContent = all ? 'ALL TIME' : MON[+p[1] - 1] + ' ' + p[0];
-  var inP = rows.filter(function (r) { return all || r[0].slice(0, 7) === ym; });
+  var s = q.value.trim().toLowerCase();
+  var inP = rows.filter(function (r) { return (all || r[0].slice(0, 7) === ym) && (!s || (r[2] + ' ' + r[1]).toLowerCase().indexOf(s) >= 0); });
   var byCat = {}, sumP = 0;
   inP.forEach(function (r) { byCat[r[1]] = (byCat[r[1]] || 0) + r[3]; sumP += r[3]; });
   var cats = Object.keys(byCat).sort(function (a, b) { return byCat[b] - byCat[a]; });
@@ -206,9 +227,9 @@ function render() {
   var sum = shown.reduce(function (s, r) { return s + r[3]; }, 0);
   tot.innerHTML = '';
   tot.appendChild(el('b', '', fmt(Math.round(sum))));
-  tot.appendChild(el('small', '', (fcat || 'all categories') + ' · ' + shown.length + (shown.length === 1 ? ' entry' : ' entries')));
+  tot.appendChild(el('small', '', (fcat || 'all categories') + (s ? ' · "' + s + '"' : '') + ' · ' + shown.length + (shown.length === 1 ? ' entry' : ' entries')));
   list.innerHTML = '';
-  if (!shown.length) { list.appendChild(el('div', 'empty', 'nothing here yet')); return; }
+  if (!shown.length) { list.appendChild(el('div', 'empty', s ? 'no matches' + (all ? '' : ' this month — try ALL') : 'nothing here yet')); return; }
   shown.forEach(function (r) {
     var row = el('div', 'row'), dp = r[0].split('-');
     var d = el('div', 'd'); d.appendChild(el('div', '', dp[2] + ' ' + MON[+dp[1] - 1])); if (all) d.appendChild(el('div', '', dp[0]));
