@@ -72,6 +72,13 @@ input:focus{outline:none;border-color:var(--cy)}
 .dpick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:16px;border:0}
 #q{flex:none;width:100%;font:inherit;font-size:16px;padding:10px 12px;color:var(--tx);background:#111118;border:1px solid var(--ln);border-radius:0;-webkit-appearance:none}
 #q::placeholder{color:#3d3d4d}
+.dwrap{position:relative;flex:none}
+#sugg{position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:5;display:flex;flex-direction:column;background:#0d0d14;border:1px solid var(--cy)}
+#sugg:empty{display:none}
+#sugg button{font:inherit;display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;font-size:16px;padding:13px 14px;color:var(--tx);background:none;border:0;border-bottom:1px solid var(--ln);border-radius:0}
+#sugg button:last-child{border-bottom:0}
+#sugg button span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#sugg button small{flex:none;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
 </style>
 </head>
 <body>
@@ -79,7 +86,7 @@ input:focus{outline:none;border-color:var(--cy)}
 <div class="view" id="logV">
 <div id="msg">ready</div>
 <input id="amt" class="cut" inputmode="decimal" placeholder="฿ 0" autocomplete="off">
-<input id="desc" class="cut" placeholder="What is it?" autocomplete="off">
+<div class="dwrap"><input id="desc" class="cut" placeholder="What is it?" autocomplete="off" autocorrect="off"><div id="sugg"></div></div>
 <div class="cats" id="cats"></div>
 <button id="save" class="cut">Save</button>
 </div>
@@ -158,7 +165,8 @@ save.onclick = function () {
     .then(function (res) {
       if (!res.ok) throw new Error(res.error || 'Not saved');
       say('✓ logged ' + fmt(a) + (dt.value !== todayStr() ? ' on ' + dlabel.textContent : '') + ' // today ' + fmt(res.totals.today) + ' // month ' + fmt(res.totals.month), 'ok');
-      amt.value = ''; desc.value = ''; cat = ''; mark(); stale = true; setDate();
+      remember([dt.value || todayStr(), cat || 'Uncategorised', d, parseFloat(a), 'App']);
+      amt.value = ''; desc.value = ''; cat = ''; mark(); stale = true; setDate(); sugg.innerHTML = '';
       save.classList.remove('busy'); save.classList.add('done'); save.textContent = '✓ Saved';
       setTimeout(resetBtn, 1400);
     })
@@ -168,6 +176,56 @@ save.onclick = function () {
       setTimeout(resetBtn, 1600);
     });
 };
+
+
+// ---------- Suggestions from past entries ----------
+var sugg = document.getElementById('sugg'), memo = {};
+function remember(r) {
+  var t = String(r[2] || '').trim(); if (!t) return;
+  var k = t.toLowerCase(), e = memo[k];
+  if (!e) e = memo[k] = { t: t, n: 0, cat: r[1], amt: r[3], d: '' };
+  e.n++;
+  if (r[0] >= e.d) { e.d = r[0]; e.t = t; e.cat = r[1]; e.amt = r[3]; }
+}
+function buildMemo(rs) {
+  memo = {}; rs.forEach(remember);
+  try { store('exp_hist', JSON.stringify(rs.slice(0, 1500))); } catch (e) {}
+}
+try { (JSON.parse(store('exp_hist') || '[]') || []).forEach(remember); } catch (e) {}
+if (KEY) fetch(API + '?action=history&key=' + encodeURIComponent(KEY))
+  .then(function (r) { return r.json(); })
+  .then(function (d) { if (d.rows) buildMemo(d.rows); })
+  .catch(function () {});
+
+function showSugg() {
+  var s = desc.value.trim().toLowerCase();
+  sugg.innerHTML = '';
+  if (!s) return;
+  var list = Object.keys(memo).map(function (k) { return memo[k]; })
+    .filter(function (e) { var t = e.t.toLowerCase(); return t !== s && t.indexOf(s) >= 0; })
+    .sort(function (a, b) {
+      var pa = a.t.toLowerCase().indexOf(s) === 0 ? 0 : 1, pb = b.t.toLowerCase().indexOf(s) === 0 ? 0 : 1;
+      return pa - pb || b.n - a.n || (a.d < b.d ? 1 : -1);
+    }).slice(0, 4);
+  list.forEach(function (e) {
+    var b = document.createElement('button');
+    var sp = document.createElement('span'); sp.textContent = e.t;
+    var sm = document.createElement('small'); sm.textContent = (e.cat === 'Uncategorised' ? '' : e.cat + ' · ') + fmt(e.amt);
+    b.appendChild(sp); b.appendChild(sm);
+    b.onpointerdown = function (ev) { ev.preventDefault(); };
+    b.onclick = function () {
+      desc.value = e.t;
+      cat = e.cat === 'Uncategorised' ? '' : e.cat; mark();
+      if (!amt.value) amt.value = e.amt;
+      sugg.innerHTML = '';
+      desc.blur();
+    };
+    sugg.appendChild(b);
+  });
+}
+desc.oninput = showSugg;
+desc.onfocus = showSugg;
+desc.onblur = function () { setTimeout(function () { sugg.innerHTML = ''; }, 200); };
 
 // ---------- History ----------
 var MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -199,7 +257,7 @@ function loadHist() {
     .then(function (r) { return r.json(); })
     .then(function (d) {
       rows = (d.rows || []).slice().sort(function (a, b) { return a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0; });
-      stale = false; render();
+      stale = false; buildMemo(rows); render();
     })
     .catch(function () { list.innerHTML = ''; list.appendChild(el('div', 'empty', '⚠ could not load — check signal')); });
 }
